@@ -183,6 +183,95 @@ class GameSessionBotTest {
     }
 
     @Test
+    void twistCannotReplaceEitherPlayersOccupiedCell() {
+        GameSession session = session(GameModes.PVPONLINE, "human");
+        session.setPlayer1Points(1);
+        session.setBoard(new String[][] {
+                {"X", "O", null},
+                {null, null, null},
+                {null, null, null}
+        });
+
+        for (int column = 0; column < 2; column++) {
+            int target = column;
+            assertThrows(InvalidMoveException.class,
+                    () -> session.processMove(0, target, "X", MoveType.TWIST, PatternType.NONE));
+        }
+        assertEquals("X", session.getBoard()[0][0]);
+        assertEquals("O", session.getBoard()[0][1]);
+        assertFalse(session.isTwistActive());
+        assertEquals(1, session.getPlayer1Points());
+        assertEquals("human", session.getCurrentPlayer());
+        assertNull(session.getLastMove());
+        verifyNoInteractions(matchDataRepository);
+    }
+
+    @Test
+    void laterTwistTurnCanUsePaidOverride() {
+        GameSession session = session(GameModes.PVPONLINE, "human");
+        session.setPlayer1Points(1);
+        session.setPlayer2Points(4);
+        assertTrue(session.processMove(0, 0, "X", MoveType.TWIST, PatternType.NONE));
+
+        assertTrue(session.processMove(0, 0, "X", MoveType.OVERRIDE, PatternType.NONE));
+        assertEquals("X", session.getBoard()[0][0]);
+        assertEquals(0, session.getPlayer2Points());
+        assertTrue(session.isTwistActive());
+    }
+
+    @Test
+    void laterTwistTurnCannotUseOverrideWithoutEnoughPoints() {
+        GameSession session = session(GameModes.PVPONLINE, "human");
+        session.setPlayer1Points(1);
+        session.setPlayer2Points(3);
+        assertTrue(session.processMove(0, 0, "X", MoveType.TWIST, PatternType.NONE));
+
+        assertFalse(session.processMove(0, 0, "X", MoveType.OVERRIDE, PatternType.NONE));
+        assertEquals("O", session.getBoard()[0][0]);
+        assertEquals(3, session.getPlayer2Points());
+        assertEquals("bot", session.getCurrentPlayer());
+        assertTrue(session.isTwistActive());
+    }
+
+    @Test
+    void laterTwistTurnCanUsePaidDoubleOverride() {
+        GameSession session = session(GameModes.PVPONLINE, "human");
+        session.setPlayer1Points(1);
+        session.setPlayer2Points(5);
+        session.setBoard(new String[][] {
+                {null, "O", null},
+                {null, null, null},
+                {null, null, "O"}
+        });
+        assertTrue(session.processMove(0, 0, "X", MoveType.TWIST, PatternType.NONE));
+
+        assertTrue(session.processMove(0, 1, "X", MoveType.DOUBLE_OVERRIDE, PatternType.NONE));
+        assertEquals("bot", session.getCurrentPlayer());
+        assertEquals(5, session.getPlayer2Points());
+        assertTrue(session.processMove(2, 2, "X", MoveType.DOUBLE_OVERRIDE, PatternType.NONE));
+        assertEquals("X", session.getBoard()[0][1]);
+        assertEquals("X", session.getBoard()[2][2]);
+        assertEquals(0, session.getPlayer2Points());
+        assertEquals("human", session.getCurrentPlayer());
+        assertTrue(session.isTwistActive());
+    }
+
+    @Test
+    void unaffordableDoubleOverrideDoesNotLeaveExtraTurnActive() {
+        GameSession session = session(GameModes.PVPONLINE, "human");
+        session.setPlayer1Points(1);
+        session.setPlayer2Points(4);
+        assertTrue(session.processMove(0, 0, "X", MoveType.TWIST, PatternType.NONE));
+
+        assertFalse(session.processMove(0, 0, "X", MoveType.DOUBLE_OVERRIDE, PatternType.NONE));
+        assertFalse(session.isDoubleOverride());
+        assertEquals(4, session.getPlayer2Points());
+        assertEquals("O", session.getBoard()[0][0]);
+        assertTrue(session.processMove(0, 0, "X", MoveType.OVERRIDE, PatternType.NONE));
+        assertEquals("human", session.getCurrentPlayer());
+    }
+
+    @Test
     void botActivatesTwistAndWinsWithHumanSymbol() {
         JsonToString json = mock(JsonToString.class);
         PlayerRepositories players = mock(PlayerRepositories.class);
@@ -197,7 +286,7 @@ class GameSessionBotTest {
         session.setMatch(new Match());
         session.setPlayer2Points(1);
         session.setBoard(new String[][] {
-                {"X", "X", "O"},
+                {"X", "X", null},
                 {null, null, null},
                 {null, null, null}
         });

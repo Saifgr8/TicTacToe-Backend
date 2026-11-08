@@ -162,11 +162,6 @@ public class GameSession {
             currentPlayerSymbol = currentPlayer.equals(player1Username) ? player2Symbol : player1Symbol;
         }
 
-        if (moveType == MoveType.DOUBLE_OVERRIDE && !isDoubleOverride) {
-            isDoubleOverride = true;
-            doubleOverrideTurns = 1;
-        }
-
 //         For Empty Pattern, remove past pattern of same pattern type row/col/diagonal
         if (moveType == MoveType.PATTERN_BOMB) {
             String matchStart = getString(i, j, patternType);
@@ -178,6 +173,11 @@ public class GameSession {
         if (!success) {
             log.debug("Move rejected for session {}: type={}, row={}, column={}", sessionId, moveType, i, j);
             return false;
+        }
+
+        if (moveType == MoveType.DOUBLE_OVERRIDE && !isDoubleOverride) {
+            isDoubleOverride = true;
+            doubleOverrideTurns = 1;
         }
 
         if (moveType == MoveType.TWIST) {
