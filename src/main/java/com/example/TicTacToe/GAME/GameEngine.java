@@ -66,7 +66,7 @@ public class GameEngine {
 
         //NORMAL MOVE WRITE
         if (moveType == MoveType.NORMAL
-                || (moveType == MoveType.TWIST && currentPlayerPoints >= 3)) {
+                || (moveType == MoveType.TWIST && currentPlayerPoints >= 1)) {
             board[i][j] = symbol;
             return true;
         }
@@ -119,6 +119,12 @@ public class GameEngine {
                         col--;
                     }
                 }
+                case MAIN_DIAGONAL -> {
+                    for (int index = 0; index < board.length; index++) {
+                        board[index][index] = null;
+                    }
+                }
+                case NONE -> throw new InvalidMoveException("Pattern type is required for a pattern bomb");
             }
             return true; // ✅ Critical to mark move as valid]
         }

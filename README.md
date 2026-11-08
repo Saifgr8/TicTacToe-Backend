@@ -14,9 +14,17 @@ Tic Tac Twist is a Java backend for a multiplayer, expanded take on tic-tac-toe.
 
 Players place symbols in turns. A win is detected when a player fills a complete row, column, or main/anti-diagonal. A full board without a win grows by one row and column, then the session is reset for another round.
 
-Three-cell patterns can award points. The available special move types are `OVERRIDE`, `EMPTY_CELL`, `PATTERN_BOMB`, `DOUBLE_OVERRIDE`, and `TWIST`. Their point costs and effects are implemented in the game engine. A twist temporarily swaps the players' effective symbols.
+Three-cell patterns can award points. The available special move types are `OVERRIDE`, `EMPTY_CELL`, `PATTERN_BOMB`, `DOUBLE_OVERRIDE`, and `TWIST`. Their point costs and effects are implemented in the game engine. A twist costs one point and swaps the players' effective symbols for two turns each, including the activating move. Another twist cannot be activated until it ends. Under the existing rules, a twist may also replace an occupied cell.
 
-The game concept may evolve, but a separate spell inventory or active bot gameplay is not currently implemented. The bot source files are commented out, and `SpecialMoveHandler` is empty.
+Bot matches use `BOTMATCH` as the game mode and player 2 as the bot. `BotEngine` selects moves, which go through the same game-session rules as player moves. A separate spell inventory is not implemented, and `SpecialMoveHandler` is empty.
+
+### Delayed bot turns and polling
+
+The create and move endpoints return the current state without waiting for the bot. When `botThinking` is `true`, poll `GET /api/match/session/{sessionId}` with the same bearer token (for example, every 250–500 ms) until it becomes `false`. The endpoint is restricted to players in the match. The default bot delay is 1,500 ms and can be configured with `game.bot.delay-ms` (a positive number). Polling returns the latest state rather than a history of missed updates.
+
+Use `lastMovePlayer` and `lastMove` (`x`, `y`, `symbol`, `moveType`, and `patternType`) to display what was played, including special moves. `botError` contains an error message if the bot could not complete its turn; stop polling and show the error instead of assuming it succeeded. WebSocket clients also receive the delayed state on `/topic/game/{sessionId}`.
+
+Disable the Twist option whenever the session response has `twistActive: true`; the backend also enforces this rule. `player1Symbol` and `player2Symbol` remain the players' original symbols in the response: exchange them for display while `twistActive` is true. When activating Twist, submit the current player's original symbol. The bot uses Twist for an immediate win or, conservatively, against a near-winning line when it can force a win on its next turn.
 
 ## Architecture
 
@@ -54,7 +62,7 @@ Repositories    GameSession -> GameEngine
 | `JWT` and `SpringSecurity` | JWT creation/validation/filtering, user lookup, and HTTP security configuration. |
 | `DTOs` | Request and response types for authentication, game sessions, moves, invitations, and RPS messages. |
 | `GlobalException` | Application exceptions and HTTP exception response handling. |
-| `bot` | Bot-related types; current bot implementation is commented out. |
+| `bot` | Bot move selection, including strategic Twist use, and delayed turn scheduling. |
 
 ## How it works
 
@@ -77,6 +85,10 @@ Match and player records are stored in PostgreSQL. Active game sessions and some
 ## Run locally
 
 You will need Java 17 or later and a PostgreSQL database. Configure the datasource and authentication settings for your environment before starting the application. Do not commit credentials or tokens to source control.
+
+For production, supply database, JWT, and Google OAuth credentials through the deployment platform's secret settings or environment variables rather than committing literal values. The local `src/main/resources/application.properties` is not currently ignored; review it before staging. Restrict access to application logs, since exception stack traces may include details from dependencies.
+
+Game lifecycle events are logged at INFO and bot scheduling and move details at DEBUG. To enable gameplay diagnostics temporarily, set the log level for `com.example.TicTacToe` to DEBUG; avoid keeping verbose logging enabled unnecessarily in production.
 
 On Windows:
 

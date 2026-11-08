@@ -2,8 +2,10 @@ package com.example.TicTacToe.GAME;
 
 
 import com.example.TicTacToe.GAME.Enums.GameStatus;
+import com.example.TicTacToe.GAME.Enums.GameModes;
 import com.example.TicTacToe.GAME.Enums.MoveType;
 import com.example.TicTacToe.GAME.Enums.PatternType;
+import com.example.TicTacToe.DTOs.GameDTOs.DTOGameMove;
 import com.example.TicTacToe.GlobalException.GameExceptions.InvalidTurnException;
 import com.example.TicTacToe.GlobalException.GameExceptions.MoveValidationFailException;
 import com.example.TicTacToe.GlobalException.PlayerNotFoundException;
@@ -16,16 +18,24 @@ import com.example.TicTacToe.Repositories.MatchDataRepository;
 import com.example.TicTacToe.Repositories.MatchRepository;
 import com.example.TicTacToe.Repositories.PlayerRepositories;
 import com.example.TicTacToe.Utils.JsonToString;
+import com.example.TicTacToe.bot.BotEngine;
+import com.example.TicTacToe.bot.BotMove;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
 
 public class GameSession {
+    private static final Logger log = LoggerFactory.getLogger(GameSession.class);
     private final JsonToString jsonToString;
     private final MatchDataRepository matchDataRepository;
     private final PlayerRepositories playerRepositories;
     private final MatchRepository matchRepository;
+    private final BotEngine botEngine;
+    private final boolean botMatch;
+    private final String botUsername;
     private Match match;
     private String sessionId;
     private String[][] board;
@@ -48,11 +58,15 @@ public class GameSession {
     private int doubleOverrideTurns = 0;
     private List<String> newPattern = new ArrayList<>();
     private List<String> winPattern = new ArrayList<>();
+    private DTOGameMove lastMove;
+    private String lastMovePlayer;
+    private String botError;
 
     public GameSession(int boardSize,
                        String player1Username, String player2Username, String player1Symbol,
                        String player2Symbol, JsonToString jsonToString, MatchDataRepository matchDataRepository, GameEngine gameEngine,
-                       PlayerRepositories playerRepositories, MatchRepository matchRepository, String startingPlayer
+                       PlayerRepositories playerRepositories, MatchRepository matchRepository, String startingPlayer,
+                       GameModes gameMode, BotEngine botEngine
     ) {
         this.sessionId = (UUID.randomUUID().toString());
         this.boardSize = boardSize;
@@ -71,23 +85,81 @@ public class GameSession {
         this.gameEngine = gameEngine;
         this.playerRepositories = playerRepositories;
         this.matchRepository = matchRepository;
+        this.botMatch = gameMode == GameModes.BOTMATCH;
+        this.botUsername = botMatch ? player2Username : null;
+        this.botEngine = botEngine;
     }
 
 
-    public boolean processMove(int i, int j, String symbol, MoveType moveType, PatternType patternType) {
+    public synchronized boolean processMove(int i, int j, String symbol, MoveType moveType, PatternType patternType) {
+        if (isBotTurn()) {
+            throw new InvalidTurnException("Please wait for the bot's move");
+        }
+        return processSingleMove(i, j, symbol, moveType, patternType);
+    }
+
+    public synchronized boolean isBotTurn() {
+        return botMatch && gameStatus == GameStatus.ONGOING && botUsername.equals(currentPlayer);
+    }
+
+    /**
+     * Makes the bot's turn when this is a bot match and the bot is the current player.
+     *
+     * @return whether a bot move was made
+     */
+    public synchronized boolean playBotMoveIfNeeded() {
+        if (!isBotTurn()) {
+            return false;
+        }
+
+        String humanUsername = botUsername.equals(player1Username) ? player2Username : player1Username;
+        String botSymbol = getSymbolForPlayer(botUsername);
+        String humanSymbol = getSymbolForPlayer(humanUsername);
+        BotMove move = botEngine.findBestMove(
+                board,
+                humanSymbol,
+                botSymbol,
+                getCurrentPlayerPoints(botUsername),
+                getCurrentPlayerPoints(humanUsername),
+                isDoubleOverride && botUsername.equals(lastMovePlayer) ? lastMove : null,
+                isTwistActive
+        );
+        if (move == null) {
+            throw new IllegalStateException("Bot could not select a move for a non-terminal game");
+        }
+        log.debug("Bot selected move for session {}: type={}, row={}, column={}, pattern={}",
+                sessionId, move.getMoveType(), move.getI(), move.getJ(), move.getPatternType());
+
+        boolean applied = processSingleMove(
+                move.getI(),
+                move.getJ(),
+                botSymbol,
+                move.getMoveType(),
+                move.getPatternType()
+        );
+        if (!applied) {
+            throw new IllegalStateException("Bot selected a move that GameEngine rejected");
+        }
+        return true;
+    }
+
+    private boolean processSingleMove(int i, int j, String symbol, MoveType moveType, PatternType patternType) {
         if (gameStatus == GameStatus.WON) return false;
 
-        if (moveType == MoveType.TWIST && !isTwistActive) {
-            isTwistActive = true;
-            player2TwistTurnsLeft = 2;
-            player1TwistTurnsLeft = 2;
+        if (moveType == MoveType.TWIST && isTwistActive) {
+            throw new InvalidTurnException("Twist is already active");
+        }
+        if (moveType == MoveType.TWIST && isDoubleOverride) {
+            throw new InvalidTurnException("Complete the double override before using twist");
         }
 
         String currentPlayerSymbol = getSymbolForPlayer(currentPlayer);
         int currentPlayerPoints = getCurrentPlayerPoints(currentPlayer);
         if (!currentPlayerSymbol.equals(symbol) && !isTwistActive) {
-            switchTurn();
-            throw new InvalidTurnException("Invalid turn, not your turn");
+            throw new InvalidTurnException("Invalid move, not your turn");
+        }
+        if (moveType == MoveType.TWIST) {
+            currentPlayerSymbol = currentPlayer.equals(player1Username) ? player2Symbol : player1Symbol;
         }
 
         if (moveType == MoveType.DOUBLE_OVERRIDE && !isDoubleOverride) {
@@ -95,17 +167,30 @@ public class GameSession {
             doubleOverrideTurns = 1;
         }
 
-        // For Empty Pattern, remove past pattern of same pattern type row/col/diagonal
-//        if (moveType == MoveType.PATTERN_BOMB) {
-//            String matchStart = getString(i, j, patternType);
-//            pastPatterns.removeIf(pattern -> pattern.startsWith(matchStart));
-//        }
+//         For Empty Pattern, remove past pattern of same pattern type row/col/diagonal
+        if (moveType == MoveType.PATTERN_BOMB) {
+            String matchStart = getString(i, j, patternType);
+            pastPatterns.removeIf(pattern -> pattern.startsWith(matchStart));
+        }
 
         //VALIDATE AND APPLY
         boolean success = gameEngine.applyMove(board, i, j, currentPlayerSymbol, moveType, patternType, currentPlayerPoints);
         if (!success) {
+            log.debug("Move rejected for session {}: type={}, row={}, column={}", sessionId, moveType, i, j);
             return false;
         }
+
+        if (moveType == MoveType.TWIST) {
+            isTwistActive = true;
+            player2TwistTurnsLeft = 2;
+            player1TwistTurnsLeft = 2;
+            log.info("Twist activated for session {}", sessionId);
+        }
+        log.debug("Move applied for session {}: type={}, row={}, column={}, pattern={}",
+                sessionId, moveType, i, j, patternType);
+
+        lastMove = new DTOGameMove(sessionId, i, j, currentPlayerSymbol, moveType, patternType);
+        lastMovePlayer = currentPlayer;
 
         switch (moveType) {
             case NORMAL:
@@ -124,7 +209,7 @@ public class GameSession {
                 break;
             }
             case TWIST:
-                deductPoints(currentPlayer, 3);
+                deductPoints(currentPlayer, 1);
                 break;
         }
 
@@ -198,7 +283,7 @@ public class GameSession {
             playerRepositories.save(looserPlayer);
             matchRepository.save(match);
 
-            System.out.println("GAME WON BY: " + currentPlayer + " (" + currentPlayerSymbol + ")");
+            log.info("Game won for session {}", sessionId);
             return true;
         }
 
@@ -206,8 +291,9 @@ public class GameSession {
         boolean isDraw = gameEngine.isDraw(board);
         if (isDraw) {
             gameStatus = GameStatus.DRAW;
-            System.out.println("Game draw, starting bigger board");
+            log.info("Game drawn for session {}; expanding board from {} to {}", sessionId, boardSize, boardSize + 1);
             resetForNextBoard(boardSize + 1);
+            return true;
         }
 
         //SWITCH PLAYER
@@ -219,9 +305,9 @@ public class GameSession {
             } else if (currentPlayer.equals(player2Username) && player2TwistTurnsLeft > 0) {
                 player2TwistTurnsLeft--;
             }
-            if (player1TwistTurnsLeft == 0 && player2TwistTurnsLeft == 0) {
+            if (isTwistActive && player1TwistTurnsLeft == 0 && player2TwistTurnsLeft == 0) {
                 isTwistActive = false;
-                System.out.println("Twist crazy has ended");
+                log.info("Twist ended for session {}", sessionId);
             }
             switchTurn();
             isDoubleOverride = false;
@@ -274,9 +360,9 @@ public class GameSession {
 
     public String getSymbolForPlayer(String currentPlayer) {
         if (currentPlayer.equals(player1Username)) {
-            return (player1TwistTurnsLeft > 0) ? player2Symbol : player1Symbol;
+            return isTwistActive ? player2Symbol : player1Symbol;
         } else {
-            return (player2TwistTurnsLeft > 0) ? player1Symbol : player2Symbol;
+            return isTwistActive ? player1Symbol : player2Symbol;
         }
     }
 
@@ -498,6 +584,22 @@ public class GameSession {
 
     public List<String> getWinPattern() {
         return winPattern;
+    }
+
+    public DTOGameMove getLastMove() {
+        return lastMove;
+    }
+
+    public String getLastMovePlayer() {
+        return lastMovePlayer;
+    }
+
+    public String getBotError() {
+        return botError;
+    }
+
+    public void setBotError(String botError) {
+        this.botError = botError;
     }
 
     public void setWinPattern(List<String> winPattern) {

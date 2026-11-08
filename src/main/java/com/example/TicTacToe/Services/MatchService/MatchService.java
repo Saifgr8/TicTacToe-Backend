@@ -7,11 +7,13 @@ import com.example.TicTacToe.DTOs.GameDTOs.DTOGameSessionResponse;
 import com.example.TicTacToe.GAME.Enums.MoveType;
 import com.example.TicTacToe.GAME.Enums.PatternType;
 import com.example.TicTacToe.GAME.GameSession;
+import com.example.TicTacToe.GAME.GameSessionSnapshot;
 import com.example.TicTacToe.GlobalException.GameExceptions.InvalidSessionException;
 import com.example.TicTacToe.GlobalException.GameExceptions.MoveValidationFailException;
 import com.example.TicTacToe.GlobalException.NoMatchFoundWithIdException;
 import com.example.TicTacToe.GlobalException.NoMatchesForUsernameFoundException;
 import com.example.TicTacToe.GlobalException.PlayerNotFoundException;
+import com.example.TicTacToe.GlobalException.UnauthorizedRequestException;
 import com.example.TicTacToe.Interfaces.ServiceInterfaces.MatchServiceInterface;
 import com.example.TicTacToe.Models.Enums.MatchStatus;
 import com.example.TicTacToe.Models.Enums.PlayerStatus;
@@ -20,6 +22,7 @@ import com.example.TicTacToe.Models.Player;
 import com.example.TicTacToe.Repositories.MatchRepository;
 import com.example.TicTacToe.Repositories.PlayerRepositories;
 import com.example.TicTacToe.WebSocketConfiguration.GameSessionManager;
+import com.example.TicTacToe.bot.BotTurnScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,11 +35,14 @@ public class MatchService implements MatchServiceInterface {
     private final MatchRepository matchRepository;
     private final PlayerRepositories playerRepositories;
     private final GameSessionManager sessionManager;
+    private final BotTurnScheduler botTurnScheduler;
 
-    public MatchService(MatchRepository matchRepository, PlayerRepositories playerRepositories, GameSessionManager manager) {
+    public MatchService(MatchRepository matchRepository, PlayerRepositories playerRepositories,
+                        GameSessionManager manager, BotTurnScheduler botTurnScheduler) {
         this.matchRepository = matchRepository;
         this.playerRepositories = playerRepositories;
         this.sessionManager = manager;
+        this.botTurnScheduler = botTurnScheduler;
     }
 
     public List<Match> fetchAllMatchesForPlayer(Long id) {
@@ -48,9 +54,9 @@ public class MatchService implements MatchServiceInterface {
 
     @Transactional
     public DTOGameSessionResponse createMatch(DTOGameCreate request) {
-        System.out.println(request);
         GameSession session = sessionManager.createSession(request);
-        DTOGameSessionResponse response = convertToDTO(session);
+        DTOGameSessionResponse response = GameSessionSnapshot.from(session);
+        botTurnScheduler.scheduleAfterCommit(session);
         return response;
     }
 
@@ -60,19 +66,33 @@ public class MatchService implements MatchServiceInterface {
         if (session == null) {
             throw new InvalidSessionException("Unable to find session.");
         }
-        boolean success = session.processMove(
-                request.getX(),
-                request.getY(),
-                request.getSymbol(),
-                request.getMoveType() != null ? request.getMoveType() : MoveType.NORMAL,
-                request.getPatternType() != null ? request.getPatternType() : PatternType.NONE
-        );
-        if (success) {
-            DTOGameSessionResponse response = convertToDTO(session);
-            return  response;
-        } else{
-            throw new MoveValidationFailException("Invalid Move");
+        synchronized (session) {
+            boolean success = session.processMove(
+                    request.getX(),
+                    request.getY(),
+                    request.getSymbol(),
+                    request.getMoveType() != null ? request.getMoveType() : MoveType.NORMAL,
+                    request.getPatternType() != null ? request.getPatternType() : PatternType.NONE
+            );
+            if (!success) {
+                throw new MoveValidationFailException("Invalid Move");
+            }
+            DTOGameSessionResponse response = GameSessionSnapshot.from(session);
+            botTurnScheduler.scheduleAfterCommit(session);
+            return response;
         }
+    }
+
+    public DTOGameSessionResponse getSessionState(String sessionId, String email) {
+        GameSession session = sessionManager.getSession(sessionId);
+        if (session == null) {
+            throw new InvalidSessionException("Unable to find session.");
+        }
+        Match match = session.getMatch();
+        if (!email.equals(match.getPlayer1().getEmail()) && !email.equals(match.getPlayer2().getEmail())) {
+            throw new UnauthorizedRequestException("You are not a player in this session.");
+        }
+        return GameSessionSnapshot.from(session);
     }
 
     @Transactional
@@ -156,30 +176,5 @@ public class MatchService implements MatchServiceInterface {
 
         return matchRepository.save(match);
     }
-
-    private static DTOGameSessionResponse convertToDTO(GameSession session) {
-        DTOGameSessionResponse response = new DTOGameSessionResponse();
-        //GAME REALTED
-        response.setSessionId(session.getSessionId());
-        response.setBoard(session.getBoard());
-        response.setGameStatus(session.getGameStatus());
-        response.setCurrentPlayer(session.getCurrentPlayer());
-        response.setWinner(session.getWinner());
-        response.setDoubleOverrideActive(session.isDoubleOverride());
-        response.setDoubleOverrideTurnsLeft(session.getDoubleOverrideTurns());
-        response.setThreePatterns(session.getNewPattern());
-        response.setWinPattern(session.getWinPattern());
-
-        //PLAYER REALTED
-        response.setPlayer1Points(session.getPlayer1Points());
-        response.setPlayer1Symbol(session.getPlayer1Symbol());
-        response.setPlayer1TwistTurns(session.getPlayer1TwistTurnsLeft());
-        response.setPlayer2Points(session.getPlayer2Points());
-        response.setPlayer2Symbol(session.getPlayer2Symbol());
-        response.setPlayer2TwistTurns(session.getPlayer2TwistTurnsLeft());
-        response.setTwistActive(session.isTwistActive());
-        return response;
-    }
-
 
 }

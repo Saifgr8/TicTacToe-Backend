@@ -25,9 +25,45 @@ public class DTOGameSessionResponse {
     private boolean isDoubleOverrideActive;
     private List<String> newPattern;
     private List<String> winPattern;
+    private DTOGameMove lastMove;
+    private String lastMovePlayer;
+    private boolean botThinking;
+    private String botError;
 
 
     public DTOGameSessionResponse() {
+    }
+
+    public DTOGameMove getLastMove() {
+        return lastMove;
+    }
+
+    public void setLastMove(DTOGameMove lastMove) {
+        this.lastMove = lastMove;
+    }
+
+    public String getLastMovePlayer() {
+        return lastMovePlayer;
+    }
+
+    public void setLastMovePlayer(String lastMovePlayer) {
+        this.lastMovePlayer = lastMovePlayer;
+    }
+
+    public boolean isBotThinking() {
+        return botThinking;
+    }
+
+    public void setBotThinking(boolean botThinking) {
+        this.botThinking = botThinking;
+    }
+
+    public String getBotError() {
+        return botError;
+    }
+
+    public void setBotError(String botError) {
+        this.botError = botError;
     }
 
     public DTOGameSessionResponse(String sessionId, boolean isTwistActive, String player2Symbol,

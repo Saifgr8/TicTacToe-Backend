@@ -3,6 +3,7 @@ package com.example.TicTacToe.Services;
 
 import com.example.TicTacToe.DTOs.AuthDTOs.DTOAuthLoginRequest;
 import com.example.TicTacToe.DTOs.AuthDTOs.DTOAuthRegisterRequest;
+import com.example.TicTacToe.DTOs.AuthDTOs.DTOLoginResponse;
 import com.example.TicTacToe.GlobalException.PlayerAlreadyExistsException;
 import com.example.TicTacToe.GlobalException.PlayerNotFoundException;
 import com.example.TicTacToe.JWT.JWTUtils;
@@ -91,12 +92,8 @@ public class AuthService {
         when(jwtUtils.generateJWTFromEmail(any(UserDetails.class)))
                 .thenReturn("dummy.jwt.token");
 
-        Map<String, Object> result = playerAuthService.loginPlayerService(request);
-        assertTrue(result.containsKey("token"));
-        assertNotNull(result.get("token"));
-        assertTrue(result.get("token") instanceof String);
-        assertFalse(((String) result.get("token")).isEmpty());
-
+        DTOLoginResponse result = playerAuthService.loginPlayerService(request);
+        assertNotNull(result.getJwt());
     }
     @Test
     void testGetPlayerByUsername_ShouldThrowException_InvalidUsernameProvided(){

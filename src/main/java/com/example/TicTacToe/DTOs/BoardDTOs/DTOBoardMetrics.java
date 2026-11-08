@@ -1,5 +1,7 @@
 package com.example.TicTacToe.DTOs.BoardDTOs;
 
+import com.example.TicTacToe.GAME.Enums.PatternType;
+
 public class DTOBoardMetrics {
     private int rowIndex;
 
@@ -13,6 +15,10 @@ public class DTOBoardMetrics {
     private String colComment;
     private String leftDiagonalComment;
     private String rightDiagonalComment;
+    private PatternType criticalPattern;
+    private int criticalRow;
+    private int criticalColumn;
+    private int criticalRemainingCells;
 
     public DTOBoardMetrics(int rightDiagonalIndex,
                            int colIndex, int rowIndex,
@@ -62,6 +68,38 @@ public class DTOBoardMetrics {
 
     public void setRightDiagonalIndex(int rightDiagonalIndex) {
         this.rightDiagonalIndex = rightDiagonalIndex;
+    }
+
+    public PatternType getCriticalPattern() {
+        return criticalPattern;
+    }
+
+    public void setCriticalPattern(PatternType criticalPattern) {
+        this.criticalPattern = criticalPattern;
+    }
+
+    public int getCriticalRow() {
+        return criticalRow;
+    }
+
+    public void setCriticalRow(int criticalRow) {
+        this.criticalRow = criticalRow;
+    }
+
+    public int getCriticalColumn() {
+        return criticalColumn;
+    }
+
+    public void setCriticalColumn(int criticalColumn) {
+        this.criticalColumn = criticalColumn;
+    }
+
+    public int getCriticalRemainingCells() {
+        return criticalRemainingCells;
+    }
+
+    public void setCriticalRemainingCells(int criticalRemainingCells) {
+        this.criticalRemainingCells = criticalRemainingCells;
     }
 
     public String getRowComment() {

@@ -89,6 +89,10 @@ public class DTOGameCreate {
         return gameMode;
     }
 
+    public void setGameMode(GameModes gameMode) {
+        this.gameMode = gameMode;
+    }
+
     @Override
     public String toString() {
         return "DTOGameCreate{" +

@@ -2,8 +2,13 @@ package com.example.TicTacToe.Contollers.WebSocketContoller;
 
 import com.example.TicTacToe.DTOs.GameDTOs.*;
 import com.example.TicTacToe.GAME.GameSession;
+import com.example.TicTacToe.GAME.GameSessionSnapshot;
+import com.example.TicTacToe.GlobalException.GameExceptions.MoveValidationFailException;
 import com.example.TicTacToe.Utils.RPSWinner;
 import com.example.TicTacToe.WebSocketConfiguration.GameSessionManager;
+import com.example.TicTacToe.bot.BotTurnScheduler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -18,11 +23,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Controller
 public class GameWebSocketController {
+    private static final Logger log = LoggerFactory.getLogger(GameWebSocketController.class);
     @Autowired
     private GameSessionManager gameSessionManager;
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    @Autowired
+    private BotTurnScheduler botTurnScheduler;
 
     private final Map<String, Map<String, String>> rpsChoicesMap = new ConcurrentHashMap<>();
 
@@ -34,10 +43,9 @@ public class GameWebSocketController {
     @SendTo("/topic/session")
     public DTOGameSessionResponse createGame(@Payload DTOGameCreate dto) {
 
-        System.out.println("🔥 CREATE GAME method triggered with: " + dto.getPlayer1Username());
         GameSession session = gameSessionManager.createSession(dto);
-        System.out.println(session.getSessionId());
-        DTOGameSessionResponse response = convertToDTO(session);
+        DTOGameSessionResponse response = GameSessionSnapshot.from(session);
+        botTurnScheduler.scheduleAfterCommit(session);
         return response;
     }
 
@@ -45,18 +53,22 @@ public class GameWebSocketController {
     @MessageMapping("/move")
     @SendTo("/topic/game")
     public void handleMove(@Payload DTOGameMove dto) {
-        System.out.println("Move is triggered: " + dto.getSessionId());
         GameSession session = gameSessionManager.getSession(dto.getSessionId());
-        System.out.println(session);
         if (session != null) {
-            boolean success = session.processMove(
-                    dto.getX(), dto.getY(), dto.getSymbol(), dto.getMoveType(), dto.getPatternType()
-            );
-            DTOGameSessionResponse response = convertToDTO(session);
-            System.out.println("after a move was made, response is: " + response.toString());
-            messagingTemplate.convertAndSend("/topic/game/" + dto.getSessionId(), response);
+            synchronized (session) {
+                boolean success = session.processMove(
+                        dto.getX(), dto.getY(), dto.getSymbol(), dto.getMoveType(), dto.getPatternType()
+                );
+                if (!success) {
+                    throw new MoveValidationFailException("Invalid Move");
+                }
+                DTOGameSessionResponse response = GameSessionSnapshot.from(session);
+                messagingTemplate.convertAndSend("/topic/game/" + dto.getSessionId(), response);
+                botTurnScheduler.scheduleAfterCommit(session);
+            }
 
         } else {
+            log.debug("WebSocket move rejected: session not found");
             messagingTemplate.convertAndSend("/topic/errors", "Invalid session ID: " + dto.getSessionId());
         }
     }
@@ -64,7 +76,6 @@ public class GameWebSocketController {
     @MessageMapping("/rps/choice")
     public void handleRSPChoice(@Payload DTORPSChoice dtorpsChoice, Principal principal) {
 
-        System.out.println(dtorpsChoice.toString());
         String currentUsername = (principal.getName());
         String matchId = dtorpsChoice.getRpsMatchId();
 
@@ -72,7 +83,6 @@ public class GameWebSocketController {
         rpsChoicesMap.computeIfAbsent(matchId, k -> new ConcurrentHashMap<>())
                 .put(currentUsername, dtorpsChoice.getChoice());
 
-        System.out.println("MAP IS: " + rpsChoicesMap);
 
         String player1 = (dtorpsChoice.getPlayer1());
         String player2 = (dtorpsChoice.getPlayer2());
@@ -100,8 +110,6 @@ public class GameWebSocketController {
         String currentWinner = principal.getName();
         String dtoWinnerPlayer = dtorpsWinner.getWinnerPlayer();
 
-        System.out.println(currentWinner);
-        System.out.println("from dto: " + dtoWinnerPlayer);
         if (!currentWinner.equalsIgnoreCase(dtoWinnerPlayer)) {
             throw new RuntimeException("Winner players are different.");
         }
@@ -109,28 +117,5 @@ public class GameWebSocketController {
         messagingTemplate.convertAndSendToUser(dtorpsWinner.getLooserPlayer(), "/queue/rps-winner", dtorpsWinner);
         messagingTemplate.convertAndSendToUser(currentWinner, "/queue/rps-winner", dtorpsWinner);
     }
-
-    private DTOGameSessionResponse convertToDTO(GameSession session) {
-        DTOGameSessionResponse response = new DTOGameSessionResponse();
-        //GAME REALTED
-        response.setSessionId(session.getSessionId());
-        response.setBoard(session.getBoard());
-        response.setGameStatus(session.getGameStatus());
-        response.setCurrentPlayer(session.getCurrentPlayer());
-        response.setWinner(session.getWinner());
-        response.setDoubleOverrideActive(session.isDoubleOverride());
-        response.setDoubleOverrideTurnsLeft(session.getDoubleOverrideTurns());
-
-        //PLAYER REALTED
-        response.setPlayer1Points(session.getPlayer1Points());
-        response.setPlayer1Symbol(session.getPlayer1Symbol());
-        response.setPlayer1TwistTurns(session.getPlayer1TwistTurnsLeft());
-        response.setPlayer2Points(session.getPlayer2Points());
-        response.setPlayer2Symbol(session.getPlayer2Symbol());
-        response.setPlayer2TwistTurns(session.getPlayer2TwistTurnsLeft());
-        response.setTwistActive(session.isTwistActive());
-        return response;
-    }
-
 
 }

@@ -13,6 +13,9 @@ import com.example.TicTacToe.Repositories.MatchDataRepository;
 import com.example.TicTacToe.Repositories.MatchRepository;
 import com.example.TicTacToe.Repositories.PlayerRepositories;
 import com.example.TicTacToe.Utils.JsonToString;
+import com.example.TicTacToe.bot.BotEngine;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class GameSessionManager {
+    private static final Logger log = LoggerFactory.getLogger(GameSessionManager.class);
     @Autowired
     private PlayerRepositories playerRepositories;
 
@@ -38,16 +42,18 @@ public class GameSessionManager {
     @Autowired
     private GameEngine gameEngine;
 
+    @Autowired
+    private BotEngine botEngine;
+
     private final Map<String, GameSession> activeSessions = new ConcurrentHashMap<>();
 
     public GameSession createSession(DTOGameCreate dto) {
-        System.out.println(dto);
         //FIND PLAYERS
         Player player1 = playerRepositories.findPlayerByUsername(dto.getPlayer1Username())
                 .orElseThrow(() -> new PlayerNotFoundException("No player found with this username"));
-        Player player2 = playerRepositories.findPlayerByUsername(dto.getPlayer2Username())
+        Player player2 = playerRepositories.findPlayerByEmail(dto.getPlayer2Username() + "@dummy.com")
                 .orElseGet(() -> {
-                    System.out.println("⚠️ Player2 not found, creating a new dummy player: " + dto.getPlayer2Username());
+                    log.debug("Creating dummy second player for new session");
                    //String uniqueId = UUID.randomUUID().toString().substring(0, 8); // short random ID
                     String uniqueUsername = dto.getPlayer2Username();
                     String uniqueEmail = uniqueUsername + "@dummy.com";
@@ -84,18 +90,21 @@ public class GameSessionManager {
                 gameEngine,
                 playerRepositories,
                 matchRepository,
-                dto.getStartingPlayer()
+                dto.getStartingPlayer(),
+                dto.getGameMode(),
+                botEngine
         );
         gameSession.setMatch(savedMatch);
 
         //SAVE PLAYER CHANGE
         player1.setPlayerStatus(PlayerStatus.PLAYING);
-        player2.setPlayerStatus(PlayerStatus.PLAYING);
         playerRepositories.save(player1);
+        player2.setPlayerStatus(PlayerStatus.PLAYING);
         playerRepositories.save(player2);
 
         activeSessions.put(gameSession.getSessionId(), gameSession);
-        System.out.println("Game session managher: " + activeSessions);
+        log.info("Game session created: session={}, mode={}, boardSize={}",
+                gameSession.getSessionId(), dto.getGameMode(), dto.getBoardSize());
 
         return gameSession;
     }

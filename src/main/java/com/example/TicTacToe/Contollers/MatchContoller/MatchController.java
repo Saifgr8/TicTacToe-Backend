@@ -31,7 +31,6 @@ public class MatchController  implements MatchControllerInterface {
 
     @GetMapping("/player/{id}") //used for player dashboard
     public ResponseEntity<List<Match>> getAllMatchesPlayedByPlayer(@PathVariable Long id, Principal principal){
-        System.out.println("Logged in user: " + principal.getName());
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if(authentication == null || !authentication.isAuthenticated()){
@@ -61,6 +60,15 @@ public class MatchController  implements MatchControllerInterface {
         }
         DTOGameSessionResponse response = matchService.makeMove(request);
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @GetMapping("/session/{sessionId}")
+    public ResponseEntity<DTOGameSessionResponse> getSessionState(@PathVariable String sessionId,
+                                                                  Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new UnauthorizedRequestException("Token failure, please log in again");
+        }
+        return ResponseEntity.ok(matchService.getSessionState(sessionId, authentication.getName()));
     }
 
     @PostMapping("/end")

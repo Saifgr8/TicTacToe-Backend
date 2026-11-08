@@ -2,6 +2,8 @@ package com.example.TicTacToe.Contollers.WebSocketContoller;
 
 import com.example.TicTacToe.DTOs.GameDTOs.DTOGameInvite;
 import com.example.TicTacToe.WebSocketConfiguration.ActiveUsersService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/invite")
 public class InviteController {
+    private static final Logger log = LoggerFactory.getLogger(InviteController.class);
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
@@ -34,12 +37,7 @@ public class InviteController {
     @PostMapping
     public ResponseEntity<?> sendInvite(@RequestBody DTOGameInvite gameInvite) {
 
-        System.out.println("Connected users:");
-        simpUserRegistry.getUsers().forEach(user -> {
-            System.out.println("  • " + user.getName());
-        });
-
-        System.out.println("INVITE DTO IS: " + gameInvite);
+        log.debug("Processing invite; connected users={}", simpUserRegistry.getUserCount());
         String toUser = gameInvite.getTo();
 
         if (activeUsersService.isUserOnline(toUser)) {
@@ -73,9 +71,6 @@ public class InviteController {
     public void handleReadyState(DTOGameInvite invite, Principal principal) {
         String currentPlayer = principal.getName();
         String opponentPlayer = invite.getTo().equals(currentPlayer) ? invite.getFrom() : invite.getTo();
-
-        System.out.println("inviting current player: "+ currentPlayer);
-
 
         //mark current player as ready
         playerReadyState.put(currentPlayer + "_" + opponentPlayer, true);
