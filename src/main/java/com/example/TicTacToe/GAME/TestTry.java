@@ -1,9 +1,12 @@
 package com.example.TicTacToe.GAME;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class TestTry {
+    private static final Logger log = LoggerFactory.getLogger(TestTry.class);
     public static void main(String[] args) {
         String[][] arr = {{"0","1","2","3", "4"},{"0","1","2","3", "4"},{"0","1","2","3", "4"},{"0","1","2","3", "4"},{"0","1","2","3", "4"}};
         int n = arr.length;
@@ -17,6 +20,6 @@ public class TestTry {
                 antiDiag.add("A-" + i + "-" + j + (j - 1) + (j - 2));
             }
         }
-        System.out.println(antiDiag);
+        log.info("Anti-diagonal patterns: {}", antiDiag);
     }
 }

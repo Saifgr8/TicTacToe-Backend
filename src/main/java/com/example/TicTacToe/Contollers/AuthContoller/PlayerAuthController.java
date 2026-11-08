@@ -45,7 +45,6 @@ public class PlayerAuthController implements AuthControllerInterface {
 
     @GetMapping("/player/{name}")
     public ResponseEntity<Player> getPlayerByUsernameController(@PathVariable String name) {
-        System.out.println("Name is: " + name);
         Player player = playerAuthService.getPlayerByUsernameService(name);
         return new ResponseEntity<>(player, HttpStatus.OK);
     }
