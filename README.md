@@ -14,7 +14,7 @@ Tic Tac Twist is a Java backend for a multiplayer, expanded take on tic-tac-toe.
 
 Players place symbols in turns. A win is detected when a player fills a complete row, column, or main/anti-diagonal. A full board without a win grows by one row and column, then the session is reset for another round.
 
-Three-cell patterns can award points. The available special move types are `OVERRIDE`, `EMPTY_CELL`, `PATTERN_BOMB`, `DOUBLE_OVERRIDE`, and `TWIST`. Their point costs and effects are implemented in the game engine. A twist costs one point and swaps the players' effective symbols for two turns each, including the activating move. Another twist cannot be activated until it ends. Under the existing rules, a twist may also replace an occupied cell.
+Three-cell patterns can award points. The available special move types are `OVERRIDE`, `EMPTY_CELL`, `PATTERN_BOMB`, `DOUBLE_OVERRIDE`, and `TWIST`. Their point costs and effects are implemented in the game engine. A twist costs one point, must be activated on an empty cell, and swaps the players' effective symbols for two turns each, including the activating move. Another twist cannot be activated until it ends. Later turns during a twist can use paid overrides under the usual rules.
 
 Bot matches use `BOTMATCH` as the game mode and player 2 as the bot. `BotEngine` selects moves, which go through the same game-session rules as player moves. A separate spell inventory is not implemented, and `SpecialMoveHandler` is empty.
 

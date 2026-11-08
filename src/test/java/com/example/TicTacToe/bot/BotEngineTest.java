@@ -215,9 +215,9 @@ class BotEngineTest {
     }
 
     @Test
-    void twistWinsImmediatelyEvenByReplacingAnOccupiedCell() {
+    void twistWinsImmediatelyByUsingAnEmptyCell() {
         String[][] board = {
-                {"X", "X", "O"},
+                {"X", "X", null},
                 {null, null, null},
                 {null, null, null}
         };
@@ -226,6 +226,20 @@ class BotEngineTest {
         assertEquals(MoveType.TWIST, move.getMoveType());
         assertEquals(0, move.getI());
         assertEquals(2, move.getJ());
+        assertNull(board[0][2]);
+    }
+
+    @Test
+    void twistCannotWinByReplacingAnOccupiedCell() {
+        String[][] board = {
+                {"X", "X", "O"},
+                {null, null, null},
+                {null, null, null}
+        };
+        BotMove move = botEngine.findBestMove(board, "X", "O", 1, 0);
+
+        assertNotNull(move);
+        assertNotEquals(MoveType.TWIST, move.getMoveType());
         assertEquals("O", board[0][2]);
     }
 

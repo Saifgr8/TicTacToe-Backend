@@ -35,8 +35,8 @@ public class GameEngine {
         String cell = board[i][j];
 
         //MoveType VALIDATION
-        //NORMAL MOVE -> ONLY ON EMPTY CELL
-        if (moveType == MoveType.NORMAL) {
+        // Normal moves and twist activation must use an empty cell.
+        if (moveType == MoveType.NORMAL || moveType == MoveType.TWIST) {
             if (cell != null && !cell.trim().isEmpty()) {
                 throw new InvalidMoveException("Cell already occupied, Please select other cell");
             }
@@ -53,7 +53,7 @@ public class GameEngine {
             return true;
         }
         //PATTERN -> WILL DO LATER
-        else if (moveType == MoveType.PATTERN_BOMB || moveType == MoveType.TWIST) {
+        else if (moveType == MoveType.PATTERN_BOMB) {
             return true;
         }
         return false;

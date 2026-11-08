@@ -282,7 +282,7 @@ public class BotEngine {
         }
 
         if (!twistActive && botPoints >= 1) {
-            BotMove twistWin = findTwistWin(board, humanSymbol, botSymbol);
+            BotMove twistWin = findTwistWin(board, humanSymbol);
             if (twistWin != null) {
                 return twistWin;
             }
@@ -329,14 +329,10 @@ public class BotEngine {
      *
      * @param board the current board
      * @param humanSymbol the symbol the bot would use after twisting
-     * @param botSymbol the bot's current symbol
      * @return an immediately winning twist, or {@code null}
      */
-    private BotMove findTwistWin(String[][] board, String humanSymbol, String botSymbol) {
+    private BotMove findTwistWin(String[][] board, String humanSymbol) {
         BotMove completion = findImmediateCompletion(board, humanSymbol);
-        if (completion == null) {
-            completion = findWinningMoveWithPoints(board, humanSymbol, 4, 0, botSymbol, null);
-        }
         return completion == null ? null
                 : new BotMove(completion.getI(), PatternType.NONE, MoveType.TWIST, completion.getJ());
     }
@@ -361,7 +357,7 @@ public class BotEngine {
         String[][] simulated = copyBoard(board);
         for (int row = 0; row < board.length; row++) {
             for (int column = 0; column < board.length; column++) {
-                if (humanSymbol.equals(board[row][column])) {
+                if (!isCellEmpty(board[row][column])) {
                     continue;
                 }
                 simulated[row][column] = humanSymbol;
