@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -42,6 +43,9 @@ public class GlobalExceptionHandler {
     }
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> runtimeException(RuntimeException ex){
+        if (ex instanceof AccessDeniedException) {
+            throw ex;
+        }
         log.error("Unhandled application error", ex);
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());

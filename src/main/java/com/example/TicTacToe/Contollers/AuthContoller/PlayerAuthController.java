@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -43,10 +44,17 @@ public class PlayerAuthController implements AuthControllerInterface {
         return new ResponseEntity<>(player, headers, HttpStatus.OK);
     }
 
-    @GetMapping("/player/{name}")
-    public ResponseEntity<Player> getPlayerByUsernameController(@PathVariable String name) {
-        Player player = playerAuthService.getPlayerByUsernameService(name);
+    @GetMapping("/player/{username}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Player> getPlayerByUsernameController(@PathVariable String username) {
+        Player player = playerAuthService.getPlayerByUsernameService(username);
         return new ResponseEntity<>(player, HttpStatus.OK);
+    }
+
+    @GetMapping("/check")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<String> checkAuthentication() {
+        return ResponseEntity.ok("User is authenticated");
     }
 
     @PostMapping("/google/callback")

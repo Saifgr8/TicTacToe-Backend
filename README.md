@@ -10,6 +10,8 @@ Tic Tac Twist is a Java backend for a multiplayer, expanded take on tic-tac-toe.
 - A live game session with turn handling, win and draw checks, pattern scoring, and special move types.
 - PostgreSQL persistence for players, matches, and move snapshots.
 
+The `GET /api/auth/player/{username}` lookup requires an authenticated bearer token. It retrieves the requested username, which is not necessarily the authenticated player; it is not a dedicated current-user endpoint.
+
 ### Gameplay today
 
 Players place symbols in turns. A win is detected when a player fills a complete row, column, or main/anti-diagonal. A full board without a win grows by one row and column, then the session is reset for another round.
