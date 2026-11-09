@@ -13,6 +13,5 @@ public interface AuthServicesInterfaces {
     DTOLoginResponse loginPlayerService(DTOAuthLoginRequest requestDTO);
 
     Player getPlayerByUsernameService(String name);
-
     DTOLoginResponse loginViaGoogle(DTOGoogleRequest request);
 }
